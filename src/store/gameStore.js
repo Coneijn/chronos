@@ -12,7 +12,8 @@ export const useGameStore = create((set, get) => ({
   instruction: "CARGANDO...",
   objectsData: [],
   roundVersion: 0,       // Control de versiones para regenerar físicas
-  shakeTrigger: 0,       // Disparador del terremoto
+  shakeTrigger: 0,       // Restauramos el disparador del terremoto
+  lightIntensity: 1,     // Intensidad de la luz (temporizador visual)
 
   // === ACCIONES ===
 
@@ -26,7 +27,7 @@ export const useGameStore = create((set, get) => ({
 
     // 2. REGLAS Y FILTROS (Mecánica de Profundidad)
     let ruleType = 'all'; 
-    if (level >= 6) {
+    if (level >= 10) {
         ruleType = Math.random() > 0.5 ? 'color' : 'shape';
     }
 
@@ -45,7 +46,7 @@ export const useGameStore = create((set, get) => ({
 
     // 3. TARGET VS DISTRACTORES
     let targetCount, distractorCount;
-    if (level < 6) {
+    if (level < 10) {
         targetCount = totalObjects;
         distractorCount = 0;
     } else {
@@ -89,11 +90,11 @@ export const useGameStore = create((set, get) => ({
 
     // 6. NOTACIÓN (Progresión Visual)
     let notation = 'arabic';
-    if (level >= 3 && level < 5) notation = 'tally';
-    else if (level >= 5 && level < 7) notation = Math.random() > 0.5 ? 'roman' : 'maya';
-    else if (level >= 7 && level < 10) notation = Math.random() > 0.5 ? 'binary' : 'hex';
-    else if (level >= 10) {
-        const chaos = ['cistercian', 'binary', 'hex', 'maya', 'roman', 'tally'];
+    if (level >= 5 && level < 10) notation = 'tally';
+    else if (level >= 10 && level < 15) notation = Math.random() > 0.5 ? 'roman' : 'maya';
+    else if (level >= 15 && level < 20) notation = Math.random() > 0.5 ? 'binary' : 'hex';
+    else if (level >= 20) {
+        const chaos = ['binary', 'hex', 'maya', 'roman', 'tally', 'arabic'];
         notation = chaos[Math.floor(Math.random() * chaos.length)];
     }
 
@@ -104,32 +105,62 @@ export const useGameStore = create((set, get) => ({
       currentNotation: notation,
       objectsData: shuffledObjects,
       instruction: instructionText,
-      roundVersion: roundVersion + 1 
+      roundVersion: roundVersion + 1,
+      lightIntensity: 1, // Reiniciamos la luz a su máximo nivel
     });
+  },
+
+  decreaseLight: (deltaTime, currentLevel) => {
+    const { lightIntensity } = get();
+    
+    // Si ya estamos a oscuras, frenamos para no seguir restando
+    if (lightIntensity <= 0) return;
+    
+    // Calculamos la duración total: de 20s (lvl 1) hasta un mínimo de 3s
+    const duration = Math.max(3, 20 - (currentLevel - 1));
+    
+    // Cantidad a restar basándonos en el tiempo transcurrido
+    const reduction = deltaTime / duration;
+    const nextIntensity = Math.max(0, lightIntensity - reduction);
+
+    set({ lightIntensity: nextIntensity });
+    
+    // Quitamos la interrupción automática; si se acaba el tiempo, se juega en la oscuridad
   },
 
   submitAnswer: (answer) => {
     const { targetNumber, score, level } = get();
-    
-    // Inicializar audio por si el usuario no ha tocado el botón de música aún
-    sfx.initialize(); 
+    sfx.initialize();
 
     if (answer === targetNumber) {
       // CORRECTO
-      sfx.playSuccess(); // Sonido Triunfal
+      sfx.playSuccess();
+      
+      const nextLevel = level + 1; // Calculamos el siguiente nivel
+      
       set({ 
         score: score + 100, 
-        level: level + 1 
+        level: nextLevel 
       });
+
+      // === LÓGICA DE TEMPO ===
+      if(sfx.updateTempo) {
+        sfx.updateTempo(nextLevel); 
+      }
+
+      // El jugador acertó (ya sea con luz o a oscuras), pasamos a la siguiente ronda
       get().startNewRound(); 
     } else {
       // INCORRECTO
       sfx.playError(); // Sonido Glitch
       console.log("¡Activando Shake!");
+      
       set({ 
         score: Math.max(0, score - 50),
-        shakeTrigger: Date.now() // Activa el temblor del suelo
+        shakeTrigger: Date.now() // Esto hará que ArenaFloor tiemble
       });
+      
+      // NO llamamos a startNewRound(). Tienen que intentar de nuevo hasta acertar.
     }
   }
 }));
@@ -139,6 +170,7 @@ function getRandomColor() {
     const keys = Object.values(COLORS);
     return keys[Math.floor(Math.random() * keys.length)];
 }
+
 function getRandomShape() {
     return SHAPES[Math.floor(Math.random() * SHAPES.length)];
 }

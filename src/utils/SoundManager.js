@@ -31,7 +31,18 @@ class SoundManager {
     this.isInitialized = true;
     console.log("Audio Engine & Music Ready");
   }
+  updateTempo(level) {
+    if (!this.isInitialized) return;
 
+    // Base de 135 BPM + 2 BPM por nivel adicional
+    // Ponemos un tope de 200 BPM para mantener la jugabilidad
+    const newBPM = Math.min(200, 135 + (level - 1) * 2);
+    
+    // Ramp suave para que el cambio no sea un salto brusco de tono/ritmo
+    Tone.Transport.bpm.rampTo(newBPM, 1); 
+    
+    console.log(`Tempo actualizado: ${newBPM} BPM`);
+  }
   setupInstruments() {
     // --- EFECTOS DE SONIDO (SFX) ---
     
