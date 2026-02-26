@@ -1,7 +1,6 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  /* config options here */
-  reactCompiler: true,
+  reactStrictMode: false, // <--- CAMBIA ESTO A FALSE (por defecto es true)
 };
 
 export default nextConfig;
