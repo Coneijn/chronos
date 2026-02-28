@@ -1,6 +1,6 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  reactStrictMode: false, // <--- CAMBIA ESTO A FALSE (por defecto es true)
+  output: 'export', // Esto genera la carpeta /out con archivos HTML/CSS/JS
 };
 
-export default nextConfig;
+module.exports = nextConfig;
