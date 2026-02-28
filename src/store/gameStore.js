@@ -1,31 +1,58 @@
 import { create } from 'zustand';
+import { persist } from 'zustand/middleware'; // 1. NUEVO: Importamos persist
 import { COLORS, SHAPES, COLOR_NAMES, SHAPE_NAMES } from '@/utils/gameConstants';
-import { sfx } from '@/utils/SoundManager'; // Importamos el motor de audio
+import { sfx } from '@/utils/SoundManager';
 
-export const useGameStore = create((set, get) => ({
-  // === ESTADO INICIAL ===
+// 2. NUEVO: Envolvemos todo en persist()
+export const useGameStore = create(
+  persist(
+    (set, get) => ({
   score: 0,
+  highScore: 0,
   level: 1,
   targetNumber: 0,
   options: [],
   currentNotation: 'arabic',
   instruction: "CARGANDO...",
   objectsData: [],
-  roundVersion: 0,       // Control de versiones para regenerar físicas
-  shakeTrigger: 0,       // Restauramos el disparador del terremoto
-  lightIntensity: 1,     // Intensidad de la luz (temporizador visual)
+  roundVersion: 0,       
+  shakeTrigger: 0,       
+  lightIntensity: 1,     
+  
+  strikes: 0, 
+  // NUEVO: El estado inicial ahora es 'idle' (pantalla de inicio)
+  // Posibles estados: 'idle', 'playing', 'paused', 'gameover'
+  status: 'idle',     
 
   // === ACCIONES ===
+
+  // NUEVO: Funciones de flujo de juego
+  startGame: () => {
+    set({ score: 0, level: 1, strikes: 0, status: 'playing' });
+    if (sfx.updateTempo) sfx.updateTempo(1);
+    get().startNewRound();
+  },
+
+  pauseGame: () => {
+    if (get().status === 'playing') set({ status: 'paused' });
+  },
+
+  resumeGame: () => {
+    if (get().status === 'paused') set({ status: 'playing' });
+  },
+
+  resetGame: () => {
+    get().startGame(); // Reiniciar es esencialmente volver a empezar
+  },
 
   startNewRound: () => {
     const { level, roundVersion } = get();
     
-    // 1. DIFICULTAD LOGARÍTMICA (Anti-Saturación)
-    // Nivel 1: ~3 objetos. Nivel 100: Tope de 15 objetos.
+    // 1. DIFICULTAD LOGARÍTMICA
     const maxVisualChaos = Math.min(15, Math.floor(3 + Math.log2(level) * 2.5));
     const totalObjects = Math.max(3, maxVisualChaos + (Math.random() > 0.5 ? 1 : -1));
 
-    // 2. REGLAS Y FILTROS (Mecánica de Profundidad)
+    // 2. REGLAS Y FILTROS
     let ruleType = 'all'; 
     if (level >= 10) {
         ruleType = Math.random() > 0.5 ? 'color' : 'shape';
@@ -50,7 +77,6 @@ export const useGameStore = create((set, get) => ({
         targetCount = totalObjects;
         distractorCount = 0;
     } else {
-        // A mayor nivel, más distractores (hasta 60%)
         const distractorRatio = Math.min(0.6, (level - 4) * 0.05); 
         distractorCount = Math.floor(totalObjects * distractorRatio);
         targetCount = Math.max(1, totalObjects - distractorCount);
@@ -58,16 +84,12 @@ export const useGameStore = create((set, get) => ({
 
     // 4. GENERAR OBJETOS
     const newObjects = [];
-
-    // A) Correctos
     for (let i = 0; i < targetCount; i++) {
         newObjects.push({
             color: ruleType === 'color' ? filterValue : getRandomColor(),
             shape: ruleType === 'shape' ? filterValue : getRandomShape(),
         });
     }
-
-    // B) Distractores
     for (let i = 0; i < distractorCount; i++) {
         let badColor = getRandomColor();
         let badShape = getRandomShape();
@@ -75,8 +97,6 @@ export const useGameStore = create((set, get) => ({
         else if (ruleType === 'shape') while (badShape === filterValue) badShape = getRandomShape();
         newObjects.push({ color: badColor, shape: badShape });
     }
-
-    // C) Barajar
     const shuffledObjects = newObjects.sort(() => Math.random() - 0.5);
 
     // 5. BOTONES DE RESPUESTA
@@ -88,13 +108,13 @@ export const useGameStore = create((set, get) => ({
     }
     const shuffledOptions = Array.from(optionSet).sort(() => Math.random() - 0.5);
 
-    // 6. NOTACIÓN (Progresión Visual)
+    // 6. NOTACIÓN
     let notation = 'arabic';
     if (level >= 5 && level < 10) notation = 'tally';
     else if (level >= 10 && level < 15) notation = Math.random() > 0.5 ? 'roman' : 'maya';
     else if (level >= 15 && level < 20) notation = Math.random() > 0.5 ? 'binary' : 'hex';
     else if (level >= 20) {
-        const chaos = ['binary', 'hex', 'maya', 'roman', 'tally', 'arabic'];
+        const chaos = ['binary', 'hex', 'maya', 'roman', 'tally', 'arabic', 'cistercian'];
         notation = chaos[Math.floor(Math.random() * chaos.length)];
     }
 
@@ -106,71 +126,80 @@ export const useGameStore = create((set, get) => ({
       objectsData: shuffledObjects,
       instruction: instructionText,
       roundVersion: roundVersion + 1,
-      lightIntensity: 1, // Reiniciamos la luz a su máximo nivel
+      lightIntensity: 1, 
     });
   },
 
   decreaseLight: (deltaTime, currentLevel) => {
-    const { lightIntensity } = get();
+    const { lightIntensity, status } = get();
     
-    // Si ya estamos a oscuras, frenamos para no seguir restando
-    if (lightIntensity <= 0) return;
+    // NUEVO: Frenar el contador de luz si no estamos activamente jugando (ej: en pausa)
+    if (lightIntensity <= 0 || status !== 'playing') return;
     
-    // Calculamos la duración total: de 20s (lvl 1) hasta un mínimo de 3s
     const duration = Math.max(3, 20 - (currentLevel - 1));
-    
-    // Cantidad a restar basándonos en el tiempo transcurrido
     const reduction = deltaTime / duration;
     const nextIntensity = Math.max(0, lightIntensity - reduction);
 
     set({ lightIntensity: nextIntensity });
-    
-    // Quitamos la interrupción automática; si se acaba el tiempo, se juega en la oscuridad
   },
 
-  submitAnswer: (answer) => {
-    const { targetNumber, score, level } = get();
-    sfx.initialize();
+ submitAnswer: (answer) => {
+        const { targetNumber, score, level, strikes, status, highScore } = get();
+        
+        if (status !== 'playing') return; 
 
-    if (answer === targetNumber) {
-      // CORRECTO
-      sfx.playSuccess();
-      
-      const nextLevel = level + 1; // Calculamos el siguiente nivel
-      
-      set({ 
-        score: score + 100, 
-        level: nextLevel 
-      });
+        sfx.initialize();
 
-      // === LÓGICA DE TEMPO ===
-      if(sfx.updateTempo) {
-        sfx.updateTempo(nextLevel); 
+        if (answer === targetNumber) {
+          // CORRECTO
+          sfx.playSuccess();
+          const nextLevel = level + 1; 
+          set({ score: score + 100, level: nextLevel });
+          if(sfx.updateTempo) sfx.updateTempo(nextLevel); 
+          get().startNewRound(); 
+        } else {
+          // INCORRECTO
+          const newStrikes = strikes + 1;
+          const isGameOver = newStrikes >= 3;
+
+          // 4. NUEVO: Evaluamos si hay un nuevo récord al perder
+          let newHighScore = highScore;
+
+          if (isGameOver) {
+            if (sfx.playGameOver) sfx.playGameOver();
+            if (sfx.toggleBGM) sfx.toggleBGM(false); 
+            
+            // Si el score actual es mayor al histórico, lo actualizamos
+            if (score > highScore) {
+              newHighScore = score;
+            }
+          } else {
+            sfx.playError(); 
+          }
+          
+          set({ 
+            score: Math.max(0, score - 50),
+            shakeTrigger: Date.now(), 
+            strikes: newStrikes,
+            status: isGameOver ? 'gameover' : 'playing',
+            highScore: newHighScore // Guardamos el récord (persist lo mandará a localStorage)
+          });
+        }
       }
-
-      // El jugador acertó (ya sea con luz o a oscuras), pasamos a la siguiente ronda
-      get().startNewRound(); 
-    } else {
-      // INCORRECTO
-      sfx.playError(); // Sonido Glitch
-      console.log("¡Activando Shake!");
-      
-      set({ 
-        score: Math.max(0, score - 50),
-        shakeTrigger: Date.now() // Esto hará que ArenaFloor tiemble
-      });
-      
-      // NO llamamos a startNewRound(). Tienen que intentar de nuevo hasta acertar.
+    }),
+    // 5. NUEVO: Configuración de persistencia (va después de la función del store)
+    {
+      name: 'chronos-high-score', // Nombre clave en el localStorage
+      partialize: (state) => ({ highScore: state.highScore }), // Solo guardamos el highScore, el resto se reinicia al recargar
     }
-  }
-}));
+  )
+);
 
 // Helpers
 function getRandomColor() {
     const keys = Object.values(COLORS);
     return keys[Math.floor(Math.random() * keys.length)];
 }
-
 function getRandomShape() {
     return SHAPES[Math.floor(Math.random() * SHAPES.length)];
 }

@@ -174,6 +174,16 @@ class SoundManager {
     if (!this.errorSynth) return;
     this.errorSynth.triggerAttackRelease("A1", "8n");
   }
+  playGameOver() {
+    if (!this.errorSynth) return;
+    const now = Tone.now();
+    
+    // Melodía descendente estilo retro (4 notas)
+    this.errorSynth.triggerAttackRelease("E3", "8n", now);
+    this.errorSynth.triggerAttackRelease("Eb3", "8n", now + 0.2);
+    this.errorSynth.triggerAttackRelease("D3", "8n", now + 0.4);
+    this.errorSynth.triggerAttackRelease("C2", "2n", now + 0.6); // Nota final grave y larga
+  }
 }
 
 export const sfx = new SoundManager();

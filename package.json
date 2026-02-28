@@ -13,6 +13,7 @@
     "@react-three/fiber": "^9.5.0",
     "@react-three/rapier": "^2.2.0",
     "@types/three": "^0.182.0",
+    "firebase": "^12.10.0",
     "next": "16.1.4",
     "react": "19.2.3",
     "react-dom": "19.2.3",
