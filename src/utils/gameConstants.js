@@ -11,7 +11,7 @@ export const THEMES = {
   neon: {
     id: 'neon',
     name: 'Cyber Neón',
-    price: 0, // Costo en monedas
+    price: 500, // Costo en monedas
     colors: { red: '#ff0055', blue: '#00ffff', green: '#39ff14', yellow: '#ccff00', purple: '#bc13fe', orange: '#ff6600' }
   },
   pastel: {
