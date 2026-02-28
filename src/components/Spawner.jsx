@@ -2,7 +2,8 @@ import { useMemo, useEffect } from 'react';
 import { RigidBody } from '@react-three/rapier';
 import { useGameStore } from '@/store/gameStore';
 import { sfx } from '@/utils/SoundManager'; // Importamos el audio
-
+import { THEMES } from '@/utils/gameConstants'; // <--- Añadir
+import DynamicModel from './DynamicModel';      // <--- Añadir
 export default function Spawner() {
   const objectsData = useGameStore((state) => state.objectsData);
   const roundVersion = useGameStore((state) => state.roundVersion);
@@ -42,27 +43,35 @@ export default function Spawner() {
 
   return (
     <>
-      {objectsWithPos.map((obj, index) => (
-        <RigidBody 
-          // CRÍTICO: Usar roundVersion en la key fuerza a React a destruir
-          // y recrear el objeto limpiamente, evitando el crash de Rapier.
-          key={`${roundVersion}-${index}`} 
-          
-          position={obj.position} 
-          colliders={obj.shape === 'sphere' ? 'ball' : 'cuboid'}
-          restitution={0.7}
-          friction={0.5}
-          onCollisionEnter={handleCollision} // <--- Evento de Audio
-        >
-          <mesh castShadow scale={obj.scale}>
-            {obj.shape === 'box' && <boxGeometry />}
-            {obj.shape === 'sphere' && <sphereGeometry args={[1, 32, 32]} />}
-            {obj.shape === 'cone' && <coneGeometry args={[1, 1, 32]} />}
-            
-            <meshStandardMaterial color={obj.color} />
-          </mesh>
-        </RigidBody>
-      ))}
+      {objectsWithPos.map((obj, index) => {
+        // Obtenemos si el tema actual requiere modelos 3D
+        const activeThemeId = useGameStore.getState().activeTheme;
+        const isModel = THEMES[activeThemeId].isModel;
+
+        return (
+          <RigidBody 
+            key={`${roundVersion}-${index}`} 
+            position={obj.position} 
+            colliders={obj.shape === 'sphere' ? 'ball' : 'cuboid'}
+            restitution={0.7}
+            friction={0.5}
+            onCollisionEnter={handleCollision} 
+          >
+            {/* Si es modelo 3D, usamos nuestro nuevo componente */}
+            {isModel ? (
+               <DynamicModel shape={obj.shape} color={obj.color} scale={obj.scale} />
+            ) : (
+               // Si no, renderizamos las figuras geométricas clásicas
+               <mesh castShadow scale={obj.scale}>
+                 {obj.shape === 'box' && <boxGeometry />}
+                 {obj.shape === 'sphere' && <sphereGeometry args={[1, 32, 32]} />}
+                 {obj.shape === 'cone' && <coneGeometry args={[1, 1, 32]} />}
+                 <meshStandardMaterial color={obj.color} />
+               </mesh>
+            )}
+          </RigidBody>
+        );
+      })}
     </>
   );
 }

@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react';
 import { useGameStore } from '@/store/gameStore';
 import NotationRenderer from '@/components/NotationRenderer';
 import { sfx } from '@/utils/SoundManager';
+import { THEMES } from '@/utils/gameConstants';
 import { saveScoreToCloud, getTopScores} from '@/utils/firebase'; // Añade esta importación arriba
 
 const GameScene = dynamic(() => import('@/components/GameScene'), {
@@ -19,8 +20,8 @@ const GameScene = dynamic(() => import('@/components/GameScene'), {
 export default function Home() {
   // Extraemos las nuevas funciones del store
   const { 
-    score, highScore, level, options, currentNotation, instruction, submitAnswer, 
-    strikes, status, startGame, pauseGame, resumeGame, resetGame 
+    score, highScore, coins, activeTheme, unlockedThemes, level, options, currentNotation, instruction, submitAnswer, 
+    strikes, status, startGame, pauseGame, resumeGame, resetGame, openStore, closeStore, buyTheme, equipTheme 
   } = useGameStore();
   
   const [isMusicOn, setIsMusicOn] = useState(false);
@@ -91,6 +92,12 @@ export default function Home() {
             >
               🏆 RANKING GLOBAL
             </button>
+            <button 
+          onClick={openStore}
+          className="bg-purple-900 hover:bg-purple-800 text-fuchsia-400 border-2 border-fuchsia-500/50 font-black py-3 px-8 rounded-full text-lg transition-all hover:scale-105 active:scale-95 w-full flex justify-center items-center gap-2 mt-2"
+        >
+          🛒 TIENDA ({coins} 🪙)
+        </button>
           </div>
         </div>
       )}
@@ -145,7 +152,69 @@ export default function Home() {
           </button>
         </div>
       )}
+{/* === PANTALLA DE TIENDA === */}
+  {status === 'store' && (
+    <div className="absolute inset-0 z-[60] flex flex-col items-center justify-center bg-black/95 backdrop-blur-xl text-white animate-in zoom-in-95 duration-300">
+      <div className="flex justify-between items-center w-full max-w-md px-6 mb-6">
+        <h2 className="text-4xl font-black text-fuchsia-500 drop-shadow-[0_0_10px_rgba(217,70,239,0.8)] tracking-widest">
+          SKINS
+        </h2>
+        <div className="bg-slate-800 border border-amber-500/50 px-4 py-2 rounded-full font-bold text-amber-400 text-xl shadow-[0_0_10px_rgba(251,191,36,0.2)]">
+          {coins} 🪙
+        </div>
+      </div>
 
+      <div className="w-[90%] max-w-md flex flex-col gap-4 max-h-[60vh] overflow-y-auto pb-4">
+        {Object.values(THEMES).map((theme) => {
+          const isUnlocked = unlockedThemes.includes(theme.id);
+          const isEquipped = activeTheme === theme.id;
+
+          return (
+            <div key={theme.id} className={`flex items-center justify-between p-4 rounded-2xl border-2 transition-all ${isEquipped ? 'bg-fuchsia-900/40 border-fuchsia-500' : 'bg-slate-900 border-slate-700'}`}>
+
+              {/* Info del Tema */}
+              <div className="flex flex-col gap-2">
+                <span className="font-black text-xl">{theme.name}</span>
+                <div className="flex gap-1">
+                  {/* Muestra de colores */}
+                  {Object.values(theme.colors).map((colorHex, idx) => (
+                    <div key={idx} className="w-4 h-4 rounded-full border border-white/20" style={{ backgroundColor: colorHex }} />
+                  ))}
+                </div>
+              </div>
+
+              {/* Botones de Acción */}
+              {isEquipped ? (
+                 <span className="text-fuchsia-400 font-bold bg-fuchsia-950 px-4 py-2 rounded-lg">EQUIPADO</span>
+              ) : isUnlocked ? (
+                <button 
+                  onClick={() => equipTheme(theme.id)}
+                  className="bg-slate-700 hover:bg-slate-600 text-white font-bold py-2 px-6 rounded-lg transition-transform active:scale-95"
+                >
+                  USAR
+                </button>
+              ) : (
+                <button 
+                  onClick={() => buyTheme(theme.id)}
+                  disabled={coins < theme.price}
+                  className={`font-black py-2 px-6 rounded-lg transition-transform active:scale-95 flex items-center gap-2 ${coins >= theme.price ? 'bg-amber-500 hover:bg-amber-400 text-black shadow-[0_0_15px_rgba(251,191,36,0.6)]' : 'bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700'}`}
+                >
+                  {theme.price} 🪙
+                </button>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      <button 
+        onClick={closeStore}
+        className="mt-8 bg-slate-800 hover:bg-slate-700 text-white font-bold py-3 px-10 rounded-full border border-white/20 transition-all hover:scale-110 active:scale-95"
+      >
+        VOLVER
+      </button>
+    </div>
+  )}
       {/* === MENÚ DE PAUSA === */}
       {status === 'paused' && (
         <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-black/80 backdrop-blur-sm text-white animate-in zoom-in-95 duration-200">

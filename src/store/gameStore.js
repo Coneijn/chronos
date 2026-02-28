@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware'; // 1. NUEVO: Importamos persist
-import { COLORS, SHAPES, COLOR_NAMES, SHAPE_NAMES } from '@/utils/gameConstants';
+import { THEMES, COLOR_KEYS, SHAPES, COLOR_NAMES, SHAPE_NAMES } from '@/utils/gameConstants';
 import { sfx } from '@/utils/SoundManager';
 
 // 2. NUEVO: Envolvemos todo en persist()
@@ -9,6 +9,9 @@ export const useGameStore = create(
     (set, get) => ({
   score: 0,
   highScore: 0,
+  coins: 0, // <--- NUEVO: Monedas del jugador
+  activeTheme: 'default', // <--- NUEVO: Tema seleccionado
+  unlockedThemes: ['default'], // <--- NUEVO: Inventario
   level: 1,
   targetNumber: 0,
   options: [],
@@ -58,17 +61,15 @@ export const useGameStore = create(
         ruleType = Math.random() > 0.5 ? 'color' : 'shape';
     }
 
-    let filterValue = null;
+    let filterKey = null; // Guardamos la 'llave' semántica ('red', 'blue')
     let instructionText = "CUENTA TODO";
 
     if (ruleType === 'color') {
-        const colorKeys = Object.keys(COLORS);
-        const randomColorKey = colorKeys[Math.floor(Math.random() * colorKeys.length)];
-        filterValue = COLORS[randomColorKey]; 
-        instructionText = `SOLO ${COLOR_NAMES[filterValue]}`;
+        filterKey = COLOR_KEYS[Math.floor(Math.random() * COLOR_KEYS.length)];
+        instructionText = `SOLO ${COLOR_NAMES[filterKey]}`;
     } else if (ruleType === 'shape') {
-        filterValue = SHAPES[Math.floor(Math.random() * SHAPES.length)];
-        instructionText = `SOLO ${SHAPE_NAMES[filterValue]}`;
+        filterKey = SHAPES[Math.floor(Math.random() * SHAPES.length)];
+        instructionText = `SOLO ${SHAPE_NAMES[filterKey]}`;
     }
 
     // 3. TARGET VS DISTRACTORES
@@ -84,19 +85,28 @@ export const useGameStore = create(
 
     // 4. GENERAR OBJETOS
     const newObjects = [];
+    const currentPalette = THEMES[get().activeTheme].colors; 
+
+    const getRandomColorKey = () => COLOR_KEYS[Math.floor(Math.random() * COLOR_KEYS.length)];
+
     for (let i = 0; i < targetCount; i++) {
         newObjects.push({
-            color: ruleType === 'color' ? filterValue : getRandomColor(),
-            shape: ruleType === 'shape' ? filterValue : getRandomShape(),
+            color: ruleType === 'color' ? currentPalette[filterKey] : currentPalette[getRandomColorKey()],
+            shape: ruleType === 'shape' ? filterKey : getRandomShape(),
         });
     }
+    
     for (let i = 0; i < distractorCount; i++) {
-        let badColor = getRandomColor();
+        let badColorKey = getRandomColorKey();
         let badShape = getRandomShape();
-        if (ruleType === 'color') while (badColor === filterValue) badColor = getRandomColor();
-        else if (ruleType === 'shape') while (badShape === filterValue) badShape = getRandomShape();
-        newObjects.push({ color: badColor, shape: badShape });
+        
+        if (ruleType === 'color') while (badColorKey === filterKey) badColorKey = getRandomColorKey();
+        else if (ruleType === 'shape') while (badShape === filterKey) badShape = getRandomShape();
+        
+        newObjects.push({ color: currentPalette[badColorKey], shape: badShape });
     }
+
+    // <--- AÑADE ESTA LÍNEA AQUÍ --->
     const shuffledObjects = newObjects.sort(() => Math.random() - 0.5);
 
     // 5. BOTONES DE RESPUESTA
@@ -130,6 +140,28 @@ export const useGameStore = create(
     });
   },
 
+  openStore: () => set({ status: 'store' }),
+  closeStore: () => set({ status: 'idle' }),
+
+  buyTheme: (themeId) => {
+    const { coins, unlockedThemes } = get();
+    const themePrice = THEMES[themeId].price;
+
+    if (coins >= themePrice && !unlockedThemes.includes(themeId)) {
+      set({ 
+        coins: coins - themePrice,
+        unlockedThemes: [...unlockedThemes, themeId],
+        activeTheme: themeId // Lo equipa automáticamente al comprar
+      });
+      // Aquí podrías agregar un sfx.playBuy() en el futuro
+    }
+  },
+
+  equipTheme: (themeId) => {
+    if (get().unlockedThemes.includes(themeId)) {
+      set({ activeTheme: themeId });
+    }
+  },
   decreaseLight: (deltaTime, currentLevel) => {
     const { lightIntensity, status } = get();
     
@@ -154,7 +186,7 @@ export const useGameStore = create(
           // CORRECTO
           sfx.playSuccess();
           const nextLevel = level + 1; 
-          set({ score: score + 100, level: nextLevel });
+          set({ score: score + 100, coins: get().coins + 5, level: nextLevel });
           if(sfx.updateTempo) sfx.updateTempo(nextLevel); 
           get().startNewRound(); 
         } else {
@@ -190,7 +222,12 @@ export const useGameStore = create(
     // 5. NUEVO: Configuración de persistencia (va después de la función del store)
     {
       name: 'chronos-high-score', // Nombre clave en el localStorage
-      partialize: (state) => ({ highScore: state.highScore }), // Solo guardamos el highScore, el resto se reinicia al recargar
+      partialize: (state) => ({ 
+        highScore: state.highScore,
+        coins: state.coins,
+        unlockedThemes: state.unlockedThemes,
+        activeTheme: state.activeTheme
+      }), 
     }
   )
 );
